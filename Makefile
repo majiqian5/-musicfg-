@@ -7,7 +7,7 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = musicfg
 
 musicfg_FILES = Tweak.xm SpectrumView.mm AuroraRingView.mm
-musicfg_CFLAGS = -fobjc-arc -Wno-modules
+musicfg_CFLAGS = -fobjc-arc -fno-modules
 musicfg_FRAMEWORKS = UIKit QuartzCore MediaPlayer
 musicfg_LDFLAGS = -Wl,-undefined,dynamic_lookup
 
