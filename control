@@ -1,8 +1,8 @@
 Package: com.liuf.musicfg
 Name: 音乐播放器发光效果Pro
-Depends: mobilesubstrate, preferenceloader
+Depends: mobilesubstrate
 Version: 2.0.0
-Architecture: iphoneos-arm64e
+Architecture: iphoneos-arm64
 Description: 灵动岛音乐播放器发光效果增强版
 Maintainer: liuf
 Author: liuf
