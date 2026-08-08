@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-13
     
     steps:
       - name: Checkout
@@ -19,62 +19,42 @@ jobs:
           git clone --depth 1 --recursive https://github.com/theos/theos.git $THEOS
           echo "THEOS=$THEOS" >> $GITHUB_ENV
       
-      - name: Clone SDKs
+      - name: Get SDK
         run: |
           export THEOS=~/theos
-          git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git /tmp/ios-sdks
+          git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git /tmp/sdks
           
-          # 选最新的 SDK（16.0以上）
-          echo "=== 所有 SDK ==="
-          ls -d /tmp/ios-sdks/iPhoneOS*.sdk
-          
-          # 复制 16.5 SDK
-          if [ -d "/tmp/ios-sdks/iPhoneOS16.5.sdk" ]; then
-            cp -r /tmp/ios-sdks/iPhoneOS16.5.sdk $THEOS/sdks/
-            echo "使用 SDK: iPhoneOS16.5.sdk"
-          elif [ -d "/tmp/ios-sdks/iPhoneOS17.5.sdk" ]; then
-            cp -r /tmp/ios-sdks/iPhoneOS17.5.sdk $THEOS/sdks/
-            echo "使用 SDK: iPhoneOS17.5.sdk"
+          # 优先用 15.5（最稳定），没有就用 16.5
+          if [ -d "/tmp/sdks/iPhoneOS15.5.sdk" ]; then
+            cp -r /tmp/sdks/iPhoneOS15.5.sdk $THEOS/sdks/
+            echo "SDK=15.5"
+          elif [ -d "/tmp/sdks/iPhoneOS16.5.sdk" ]; then
+            cp -r /tmp/sdks/iPhoneOS16.5.sdk $THEOS/sdks/
+            echo "SDK=16.5"
           else
-            # 找最新的
-            LATEST=$(ls -d /tmp/ios-sdks/iPhoneOS*.sdk | sort -V | tail -1)
-            cp -r $LATEST $THEOS/sdks/
-            echo "使用最新 SDK: $(basename $LATEST)"
+            cp -r /tmp/sdks/iPhoneOS17.5.sdk $THEOS/sdks/
+            echo "SDK=17.5"
           fi
           
-          echo "=== Theos SDK 目录 ==="
-          ls -la $THEOS/sdks/
+          ls $THEOS/sdks/
       
       - name: Install Tools
         run: |
           brew install dpkg ldid
       
-      - name: Fix Makefile
+      - name: Fix SDK version
         run: |
           export THEOS=~/theos
-          
-          # 获取 SDK 版本
-          SDK_DIR=$(ls -d $THEOS/sdks/iPhoneOS*.sdk | head -1)
-          SDK_NAME=$(basename $SDK_DIR)
-          SDK_VERSION=$(echo $SDK_NAME | sed 's/iPhoneOS//;s/.sdk//')
-          
-          echo "SDK 版本: $SDK_VERSION"
-          
-          # 修改 Makefile 中的 SDK 版本
-          sed -i '' "s/iphone:clang:[0-9.]*:/iphone:clang:$SDK_VERSION:/" Makefile
-          
-          echo "=== Makefile ==="
-          cat Makefile
+          SDK=$(ls $THEOS/sdks/ | grep iPhoneOS | head -1 | sed 's/iPhoneOS//;s/.sdk//')
+          echo "SDK版本: $SDK"
+          sed -i '' "s/iphone:clang:[0-9.]*:/iphone:clang:$SDK:/" Makefile
+          cat Makefile | head -3
       
       - name: Build
         run: |
           export THEOS=~/theos
           export PATH="$THEOS/bin:$PATH"
-          
-          echo "=== 开始编译 ==="
-          make package FINALPACKAGE=1
-          
-          echo "=== 编译成功 ==="
+          make package FINALPACKAGE=1 2>&1 | tail -100
           ls -lh packages/
       
       - name: Upload
