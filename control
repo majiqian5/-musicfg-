@@ -1,0 +1,10 @@
+Package: com.liuf.musicfg
+Name: 音乐播放器发光效果Pro
+Version: 2.0.0
+Architecture: iphoneos-arm64
+Description: 夜辰私人定制 - 新增频谱特效与灵动光圈
+Maintainer: liuf <1602389262>
+Author: liuf <1602389262>
+Section: Tweaks
+Depends: mobilesubstrate
+Installed-Size: 512
