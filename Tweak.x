@@ -13,6 +13,10 @@ static const char *kAuroraRingViewKey = "kAuroraRingViewKey";
 
 @interface PLPlatterView : UIView
 - (UIView *)contentView;
+- (void)applyBaseEffects:(NSDictionary *)prefs;
+- (NSArray *)parseColorPresets:(NSString *)presetStr;
+- (void)addSpectrumViewIfNeeded:(NSDictionary *)prefs;
+- (void)addAuroraRingViewIfNeeded:(NSDictionary *)prefs;
 @end
 
 %hook PLPlatterView
