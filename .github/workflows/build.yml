@@ -1,4 +1,4 @@
-name: Build Package
+name: Build Tweak
 
 on:
   push:
@@ -7,55 +7,18 @@ on:
 
 jobs:
   build:
-    runs-on: macos-13
+    runs-on: ubuntu-latest
+    
+    container:
+      image: theosdocker/theos:latest
     
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Install Theos
-        run: |
-          export THEOS=~/theos
-          git clone --depth 1 --recursive https://github.com/theos/theos.git $THEOS
-          echo "THEOS=$THEOS" >> $GITHUB_ENV
-      
-      - name: Get SDK
-        run: |
-          export THEOS=~/theos
-          git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git /tmp/sdks
-          
-          # 优先用 15.5（最稳定），没有就用 16.5
-          if [ -d "/tmp/sdks/iPhoneOS15.5.sdk" ]; then
-            cp -r /tmp/sdks/iPhoneOS15.5.sdk $THEOS/sdks/
-            echo "SDK=15.5"
-          elif [ -d "/tmp/sdks/iPhoneOS16.5.sdk" ]; then
-            cp -r /tmp/sdks/iPhoneOS16.5.sdk $THEOS/sdks/
-            echo "SDK=16.5"
-          else
-            cp -r /tmp/sdks/iPhoneOS17.5.sdk $THEOS/sdks/
-            echo "SDK=17.5"
-          fi
-          
-          ls $THEOS/sdks/
-      
-      - name: Install Tools
-        run: |
-          brew install dpkg ldid
-      
-      - name: Fix SDK version
-        run: |
-          export THEOS=~/theos
-          SDK=$(ls $THEOS/sdks/ | grep iPhoneOS | head -1 | sed 's/iPhoneOS//;s/.sdk//')
-          echo "SDK版本: $SDK"
-          sed -i '' "s/iphone:clang:[0-9.]*:/iphone:clang:$SDK:/" Makefile
-          cat Makefile | head -3
-      
       - name: Build
         run: |
-          export THEOS=~/theos
-          export PATH="$THEOS/bin:$PATH"
-          make package FINALPACKAGE=1 2>&1 | tail -100
-          ls -lh packages/
+          make package FINALPACKAGE=1
       
       - name: Upload
         uses: actions/upload-artifact@v4
