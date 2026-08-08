@@ -19,37 +19,41 @@ jobs:
           git clone --depth 1 --recursive https://github.com/theos/theos.git $THEOS
           echo "THEOS=$THEOS" >> $GITHUB_ENV
       
-      - name: Download SDK
+      - name: Clone SDKs repo
         run: |
           export THEOS=~/theos
-          mkdir -p $THEOS/sdks
+          # 用 git clone 整个仓库，更可靠
+          git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git /tmp/ios-sdks
           
-          # 下载 SDK
-          curl -L "https://github.com/xybp888/iOS-SDKs/raw/master/iPhoneOS16.5.sdk.zip" -o /tmp/sdk.zip
+          # 列出所有可用的 SDK
+          echo "=== 可用 SDK 列表 ==="
+          ls -la /tmp/ios-sdks/ | grep iPhoneOS
           
-          # 解压
-          cd $THEOS/sdks
-          unzip -o /tmp/sdk.zip
+          # 复制所有 SDK 到 Theos
+          cp -r /tmp/ios-sdks/iPhoneOS*.sdk $THEOS/sdks/
           
-          # 列出目录，确认 SDK 在不在
-          echo "=== SDK 目录内容 ==="
+          echo "=== Theos SDK 目录 ==="
           ls -la $THEOS/sdks/
       
       - name: Install Tools
         run: |
           brew install dpkg ldid
       
-      - name: Fix Makefile
+      - name: Auto detect SDK
         run: |
-          # 检查 SDK 版本，自动适配
           export THEOS=~/theos
-          SDK_VERSION=$(ls $THEOS/sdks/ | grep iPhoneOS | head -1 | sed 's/iPhoneOS//;s/.sdk//')
-          echo "检测到 SDK 版本: $SDK_VERSION"
           
-          # 修改 Makefile 里的 SDK 版本
-          sed -i '' "s/iphone:clang:16.5/iphone:clang:$SDK_VERSION/" Makefile
+          # 自动找最新的 SDK
+          SDK_DIR=$(ls -d $THEOS/sdks/iPhoneOS*.sdk | head -1)
+          SDK_NAME=$(basename $SDK_DIR)
+          SDK_VERSION=$(echo $SDK_NAME | sed 's/iPhoneOS//;s/.sdk//')
           
-          echo "修改后的 Makefile:"
+          echo "找到 SDK: $SDK_NAME (版本 $SDK_VERSION)"
+          
+          # 修改 Makefile
+          sed -i '' "s/iphone:clang:[0-9.]*:/iphone:clang:$SDK_VERSION:/" Makefile
+          
+          echo "修改后的 Makefile 前5行:"
           head -5 Makefile
       
       - name: Build
@@ -58,7 +62,7 @@ jobs:
           export PATH="$THEOS/bin:$PATH"
           
           echo "=== 开始编译 ==="
-          make package FINALPACKAGE=1
+          make package FINALPACKAGE=1 2>&1 | tail -50
           
           echo "=== 编译结果 ==="
           ls -lh packages/
