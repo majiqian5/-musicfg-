@@ -11,6 +11,3 @@ musicfg_CFLAGS = -fobjc-arc
 musicfg_FRAMEWORKS = UIKit QuartzCore MediaPlayer
 
 include $(THEOS_MAKE_PATH)/tweak.mk
-
-SUBPROJECTS += prefs
-include $(THEOS_MAKE_PATH)/aggregate.mk
