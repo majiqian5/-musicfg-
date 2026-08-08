@@ -12,6 +12,3 @@ musicfg_FRAMEWORKS = UIKit QuartzCore MediaPlayer
 musicfg_LDFLAGS = -Wl,-undefined,dynamic_lookup
 
 include $(THEOS_MAKE_PATH)/tweak.mk
-
-after-install::
-	install.exec "killall -9 SpringBoard"
