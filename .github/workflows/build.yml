@@ -19,21 +19,49 @@ jobs:
           git clone --depth 1 --recursive https://github.com/theos/theos.git $THEOS
           echo "THEOS=$THEOS" >> $GITHUB_ENV
       
-      - name: Get SDK
+      - name: Download SDK
         run: |
           export THEOS=~/theos
-          git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git /tmp/sdks
-          cp -r /tmp/sdks/iPhoneOS17.5.sdk $THEOS/sdks/
+          mkdir -p $THEOS/sdks
+          
+          # 下载 SDK
+          curl -L "https://github.com/xybp888/iOS-SDKs/raw/master/iPhoneOS16.5.sdk.zip" -o /tmp/sdk.zip
+          
+          # 解压
+          cd $THEOS/sdks
+          unzip -o /tmp/sdk.zip
+          
+          # 列出目录，确认 SDK 在不在
+          echo "=== SDK 目录内容 ==="
+          ls -la $THEOS/sdks/
       
       - name: Install Tools
         run: |
           brew install dpkg ldid
       
+      - name: Fix Makefile
+        run: |
+          # 检查 SDK 版本，自动适配
+          export THEOS=~/theos
+          SDK_VERSION=$(ls $THEOS/sdks/ | grep iPhoneOS | head -1 | sed 's/iPhoneOS//;s/.sdk//')
+          echo "检测到 SDK 版本: $SDK_VERSION"
+          
+          # 修改 Makefile 里的 SDK 版本
+          sed -i '' "s/iphone:clang:16.5/iphone:clang:$SDK_VERSION/" Makefile
+          
+          echo "修改后的 Makefile:"
+          head -5 Makefile
+      
       - name: Build
         run: |
           export THEOS=~/theos
           export PATH="$THEOS/bin:$PATH"
+          
+          echo "=== 开始编译 ==="
           make package FINALPACKAGE=1
+          
+          echo "=== 编译结果 ==="
+          ls -lh packages/
       
       - name: Upload
         uses: actions/upload-artifact@v4
