@@ -9,6 +9,8 @@ TWEAK_NAME = musicfg
 musicfg_FILES = Tweak.x SpectrumView.m AuroraRingView.m
 musicfg_CFLAGS = -fobjc-arc
 musicfg_FRAMEWORKS = UIKit QuartzCore MediaPlayer
-musicfg_LDFLAGS = -Wl,-undefined,dynamic_lookup
 
 include $(THEOS_MAKE_PATH)/tweak.mk
+
+SUBPROJECTS += prefs
+include $(THEOS_MAKE_PATH)/aggregate.mk
