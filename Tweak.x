@@ -6,24 +6,29 @@
 #import "AuroraRingView.h"
 
 static NSString *const kPrefsDomain = @"musicfg";
+static NSString *const kPrefsPath = @"/var/jb/User/Library/Preferences/musicfg.plist";
 
 static const char *kSpectrumViewKey = "kSpectrumViewKey";
 static const char *kAuroraRingViewKey = "kAuroraRingViewKey";
 static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
 
-@interface PLPlatterView : UIView
-- (UIView *)contentView;
+@interface UIView (MusicFG)
+- (UIView *)findSuperviewOfClass:(Class)cls;
+- (BOOL)isMusicPlatter;
+- (NSArray *)parseColors:(NSString *)presetStr;
 @end
 
 @implementation UIView (MusicFG)
 
-- (UIView *)findMaterialView {
-    if ([NSStringFromClass([self class]) containsString:@"Material"]) {
-        return self;
-    }
-    for (UIView *subview in self.subviews) {
-        UIView *found = [subview findMaterialView];
-        if (found) return found;
+- (UIView *)findSuperviewOfClass:(Class)cls {
+    UIView *superview = self.superview;
+    NSInteger level = 0;
+    while (superview && level < 15) {
+        if ([superview isKindOfClass:cls]) {
+            return superview;
+        }
+        superview = superview.superview;
+        level++;
     }
     return nil;
 }
@@ -86,7 +91,7 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
 
 @end
 
-%hook PLPlatterView
+%hook MTMaterialView
 
 - (void)didMoveToWindow {
     %orig;
@@ -96,15 +101,21 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     NSNumber *applied = objc_getAssociatedObject(self, kEffectsAppliedKey);
     if (applied && applied.boolValue) return;
     
-    NSDictionary *prefs = [[NSUserDefaults standardUserDefaults] dictionaryForKey:kPrefsDomain];
-    BOOL enableEffect = [prefs[@"EnableNotificationEffect"] boolValue] ?: YES;
+    // 找到父视图 PLPlatterView
+    Class platterClass = NSClassFromString(@"PLPlatterView");
+    UIView *platterView = platterClass ? [self findSuperviewOfClass:platterClass] : nil;
     
+    // 如果不是 platter 的材质视图，跳过
+    if (!platterView) return;
+    
+    // 读取设置
+    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath];
+    if (!prefs) prefs = @{};
+    
+    BOOL enableEffect = [prefs[@"EnableNotificationEffect"] boolValue] ?: YES;
     if (!enableEffect) return;
     
-    BOOL isMusic = [self isMusicPlatter];
-    
-    UIView *materialView = [self findMaterialView];
-    UIView *targetView = materialView ? materialView : self;
+    BOOL isMusic = [platterView isMusicPlatter];
     
     CGFloat cornerRadius = [prefs[@"CornerRadius"] floatValue] ?: 22;
     CGFloat borderWidth = [prefs[@"NotificationBorderWidth"] floatValue] ?: 2;
@@ -112,12 +123,12 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     CGFloat shadowRadius = [prefs[@"NotificationShadowRadius"] floatValue] ?: 5;
     CGFloat animationSpeed = [prefs[@"NotificationShadowAnimationSpeed"] floatValue] ?: 3;
     
-    targetView.layer.cornerRadius = cornerRadius;
-    targetView.layer.masksToBounds = NO;
-    targetView.layer.borderWidth = borderWidth;
-    targetView.layer.shadowOffset = CGSizeMake(0, shadowOffsetY);
-    targetView.layer.shadowRadius = shadowRadius;
-    targetView.layer.shadowOpacity = 0.8;
+    self.layer.cornerRadius = cornerRadius;
+    self.layer.masksToBounds = NO;
+    self.layer.borderWidth = borderWidth;
+    self.layer.shadowOffset = CGSizeMake(0, shadowOffsetY);
+    self.layer.shadowRadius = shadowRadius;
+    self.layer.shadowOpacity = 0.8;
     
     NSArray *colors = [self parseColors:prefs[@"ColorPresets"]];
     if (colors.count == 0) {
@@ -135,39 +146,39 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     borderAnim.duration = 10.0 / animationSpeed;
     borderAnim.repeatCount = HUGE_VALF;
     borderAnim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
-    [targetView.layer addAnimation:borderAnim forKey:@"borderColorAnimation"];
+    [self.layer addAnimation:borderAnim forKey:@"borderColorAnimation"];
     
     CAKeyframeAnimation *shadowAnim = [CAKeyframeAnimation animationWithKeyPath:@"shadowColor"];
     shadowAnim.values = colors;
     shadowAnim.duration = 10.0 / animationSpeed;
     shadowAnim.repeatCount = HUGE_VALF;
     shadowAnim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
-    [targetView.layer addAnimation:shadowAnim forKey:@"shadowColorAnimation"];
+    [self.layer addAnimation:shadowAnim forKey:@"shadowColorAnimation"];
     
     // 音乐播放器才加频谱和光圈
     if (isMusic) {
         BOOL enableSpectrum = [prefs[@"EnableSpectrum"] boolValue] ?: YES;
         if (enableSpectrum) {
-            SpectrumView *spectrumView = objc_getAssociatedObject(self, kSpectrumViewKey);
+            SpectrumView *spectrumView = objc_getAssociatedObject(platterView, kSpectrumViewKey);
             if (!spectrumView) {
-                CGRect bounds = self.bounds;
+                CGRect bounds = platterView.bounds;
                 spectrumView = [[SpectrumView alloc] initWithFrame:CGRectMake(0, -35, bounds.size.width, 30)];
                 spectrumView.barCount = (NSInteger)([prefs[@"SpectrumBarCount"] floatValue] ?: 12);
                 spectrumView.sensitivity = [prefs[@"SpectrumSensitivity"] floatValue] ?: 0.7;
                 spectrumView.barWidth = [prefs[@"SpectrumBarWidth"] floatValue] ?: 4;
                 spectrumView.mirrorMode = [prefs[@"SpectrumMirrorMode"] boolValue] ?: YES;
                 spectrumView.userInteractionEnabled = NO;
-                [self addSubview:spectrumView];
-                objc_setAssociatedObject(self, kSpectrumViewKey, spectrumView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                [platterView addSubview:spectrumView];
+                objc_setAssociatedObject(platterView, kSpectrumViewKey, spectrumView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 [spectrumView startAnimation];
             }
         }
         
         BOOL enableAurora = [prefs[@"EnableAuroraRing"] boolValue] ?: YES;
         if (enableAurora) {
-            AuroraRingView *ringView = objc_getAssociatedObject(self, kAuroraRingViewKey);
+            AuroraRingView *ringView = objc_getAssociatedObject(platterView, kAuroraRingViewKey);
             if (!ringView) {
-                CGRect bounds = self.bounds;
+                CGRect bounds = platterView.bounds;
                 CGFloat ringSize = MAX(bounds.size.width, bounds.size.height) + 30;
                 CGRect ringFrame = CGRectMake((bounds.size.width - ringSize) / 2, 
                                                (bounds.size.height - ringSize) / 2,
@@ -179,8 +190,8 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
                 ringView.pulseSpeed = [prefs[@"AuroraPulseSpeed"] floatValue] ?: 1.5;
                 ringView.style = [prefs[@"AuroraStyle"] integerValue] ?: 0;
                 ringView.userInteractionEnabled = NO;
-                [self insertSubview:ringView atIndex:0];
-                objc_setAssociatedObject(self, kAuroraRingViewKey, ringView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                [platterView insertSubview:ringView atIndex:0];
+                objc_setAssociatedObject(platterView, kAuroraRingViewKey, ringView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 [ringView startAnimation];
             }
         }
