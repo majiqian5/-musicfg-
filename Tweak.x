@@ -4,27 +4,25 @@
 @interface PLPlatterView : UIView
 @end
 
+@implementation UIView (AllGreen)
+
+- (void)makeAllGreen {
+    self.backgroundColor = [UIColor greenColor];
+    self.layer.borderWidth = 3;
+    self.layer.borderColor = [UIColor redColor].CGColor;
+    for (UIView *subview in self.subviews) {
+        [subview makeAllGreen];
+    }
+}
+
+@end
+
 %hook PLPlatterView
 
 - (void)didMoveToWindow {
     %orig;
-    
-    if (!self.window) return;
-    
-    // 遍历子视图，找到材质视图 MTMaterialView
-    for (UIView *subview in self.subviews) {
-        if ([NSStringFromClass([subview class]) containsString:@"Material"]) {
-            // 找到材质视图了，改成绿色背景 + 红色边框
-            subview.backgroundColor = [UIColor greenColor];
-            subview.layer.borderWidth = 5;
-            subview.layer.borderColor = [UIColor redColor].CGColor;
-            subview.layer.shadowColor = [UIColor redColor].CGColor;
-            subview.layer.shadowOffset = CGSizeZero;
-            subview.layer.shadowRadius = 20;
-            subview.layer.shadowOpacity = 1.0;
-            subview.layer.masksToBounds = NO;
-        }
-    }
+    // 不加任何判断，直接把自己和所有子视图全部改成绿色
+    [self makeAllGreen];
 }
 
 %end
