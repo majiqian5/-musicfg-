@@ -4,12 +4,11 @@ INSTALL_TARGET_PROCESSES = SpringBoard
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = musicfg_spectrum
+TWEAK_NAME = musicfg
 
-musicfg_spectrum_FILES = Tweak.x SpectrumView.m AuroraRingView.m
-musicfg_spectrum_CFLAGS = -fobjc-arc
-musicfg_spectrum_FRAMEWORKS = UIKit QuartzCore MediaPlayer
-musicfg_spectrum_FILTER = com.apple.springboard
+musicfg_FILES = Tweak.x SpectrumView.m AuroraRingView.m
+musicfg_CFLAGS = -fobjc-arc
+musicfg_FRAMEWORKS = UIKit QuartzCore MediaPlayer
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
