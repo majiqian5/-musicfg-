@@ -14,7 +14,7 @@ jobs:
       - name: Install Tools
         run: |
           brew install dpkg
-          brew install radare2 || echo "radare2 install failed"
+          brew install radare2
           which r2
       
       - name: Extract Original
@@ -24,29 +24,28 @@ jobs:
           DYLIB=$(find original_extracted -name "*.dylib" -type f | head -1)
           echo "DYLIB=$DYLIB" >> $GITHUB_ENV
       
-      - name: List All Functions
+      - name: Analyze and List Functions
         run: |
           echo "=== ALL FUNCTIONS ==="
-          r2 -q -e bin.relocs.apply=true -c "afl" "$DYLIB" | sort
+          r2 -q -e bin.relocs.apply=true -c "aaa; afl" "$DYLIB" | sort
       
       - name: Find Hook Functions
         run: |
           echo "=== HOOK RELATED ==="
-          r2 -q -e bin.relocs.apply=true -c "afl~hook" "$DYLIB" || true
-          r2 -q -e bin.relocs.apply=true -c "afl~MSHook" "$DYLIB" || true
+          r2 -q -e bin.relocs.apply=true -c "aaa; afl~hook" "$DYLIB" || true
+          r2 -q -e bin.relocs.apply=true -c "aaa; afl~MSHook" "$DYLIB" || true
       
-      - name: Find didMoveToWindow
+      - name: Find didMove
         run: |
-          echo "=== didMoveToWindow ==="
-          r2 -q -e bin.relocs.apply=true -c "afl~didMove" "$DYLIB" || true
-          r2 -q -e bin.relocs.apply=true -c "afl~moveToWindow" "$DYLIB" || true
+          echo "=== didMove ==="
+          r2 -q -e bin.relocs.apply=true -c "aaa; afl~didMove" "$DYLIB" || true
       
       - name: Find PLPlatterView
         run: |
           echo "=== PLPlatterView ==="
-          r2 -q -e bin.relocs.apply=true -c "iz~PLPlatterView" "$DYLIB" || true
+          r2 -q -e bin.relocs.apply=true -c "aaa; iz~PLPlatterView" "$DYLIB" || true
       
-      - name: Disassemble Entry
+      - name: Disassemble Main Function
         run: |
-          echo "=== ENTRY / CONSTRUCTOR ==="
-          r2 -q -e bin.relocs.apply=true -c "iE" "$DYLIB" | head -30
+          echo "=== MAIN / ENTRY ==="
+          r2 -q -e bin.relocs.apply=true -c "aaa; iE" "$DYLIB" | head -30
