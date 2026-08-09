@@ -1,0 +1,54 @@
+name: Analyze Original
+
+on:
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install Tools
+        run: |
+          brew install dpkg
+      
+      - name: Extract Original
+        run: |
+          mkdir -p original_extracted
+          dpkg-deb -x original.deb original_extracted
+      
+      - name: Analyze ObjC Classes
+        run: |
+          DYLIB=original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          echo "=== All ObjC Classes ==="
+          otool -o $DYLIB | grep -A1 "name 0x" | head -50
+          
+          echo ""
+          echo "=== All Methods ==="
+          otool -o $DYLIB | grep "name 0x" | head -100
+      
+      - name: Analyze Strings
+        run: |
+          DYLIB=original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          echo "=== Interesting Strings ==="
+          strings $DYLIB | grep -i "platter\|music\|island\|shadow\|border\|color\|glow\|effect" | head -50
+          
+          echo ""
+          echo "=== All Strings (first 100) ==="
+          strings $DYLIB | head -100
+      
+      - name: Analyze Symbols
+        run: |
+          DYLIB=original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          echo "=== All Symbols ==="
+          nm -gU $DYLIB
+          
+          echo ""
+          echo "=== Undefined Symbols (what it imports) ==="
+          nm -u $DYLIB | head -50
