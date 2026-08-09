@@ -1,7 +1,15 @@
+#import <UIKit/UIKit.h>
 #import <stdlib.h>
 
-__attribute__((constructor))
-static void test_initializer() {
-    // 如果 dylib 被加载，直接崩溃
+@interface PLPlatterView : UIView
+@end
+
+%hook PLPlatterView
+
+- (void)didMoveToWindow {
+    %orig;
+    // 如果 hook 生效，调用这个方法时就会崩溃
     abort();
 }
+
+%end
