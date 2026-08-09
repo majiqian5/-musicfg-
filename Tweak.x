@@ -11,90 +11,8 @@ static const char *kSpectrumViewKey = "kSpectrumViewKey";
 static const char *kAuroraRingViewKey = "kAuroraRingViewKey";
 static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
 
-@interface NCNotificationListSupplementaryHostingView : UIView
-@end
-
 @interface PLPlatterView : UIView
 @end
-
-%hook NCNotificationListSupplementaryHostingView
-
-- (void)didMoveToWindow {
-    %orig;
-    
-    NSNumber *applied = objc_getAssociatedObject(self, kEffectsAppliedKey);
-    if (applied && applied.boolValue) return;
-    
-    // 读取设置
-    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:kPrefsPath];
-    if (!prefs) prefs = @{};
-    
-    BOOL enableEffect = [[prefs objectForKey:@"EnableNotificationEffect"] boolValue] ?: YES;
-    if (!enableEffect) return;
-    
-    // 基础效果参数
-    CGFloat cornerRadius = [[prefs objectForKey:@"CornerRadius"] floatValue] ?: 22;
-    CGFloat borderWidth = [[prefs objectForKey:@"NotificationBorderWidth"] floatValue] ?: 2;
-    CGFloat shadowOffsetY = [[prefs objectForKey:@"NotificationShadowOffsetY"] floatValue] ?: 3;
-    CGFloat shadowRadius = [[prefs objectForKey:@"NotificationShadowRadius"] floatValue] ?: 5;
-    CGFloat animationSpeed = [[prefs objectForKey:@"NotificationShadowAnimationSpeed"] floatValue] ?: 3;
-    
-    // 直接改自己的 layer（原版就是这么做的！）
-    self.layer.cornerRadius = cornerRadius;
-    self.layer.masksToBounds = NO;
-    self.layer.borderWidth = borderWidth;
-    self.layer.shadowOffset = CGSizeMake(0, shadowOffsetY);
-    self.layer.shadowRadius = shadowRadius;
-    self.layer.shadowOpacity = 0.8;
-    
-    // 解析颜色
-    NSString *presetStr = [prefs objectForKey:@"ColorPresets"];
-    NSMutableArray *colors = [NSMutableArray array];
-    if (presetStr && presetStr.length > 0) {
-        NSArray *colorStrings = [presetStr componentsSeparatedByString:@","];
-        for (NSString *colorStr in colorStrings) {
-            NSString *trimmed = [colorStr stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-            if (trimmed.length == 7 && [trimmed hasPrefix:@"#"]) {
-                unsigned int rgbValue = 0;
-                NSScanner *scanner = [NSScanner scannerWithString:[trimmed substringFromIndex:1]];
-                [scanner scanHexInt:&rgbValue];
-                
-                UIColor *color = [UIColor colorWithRed:((rgbValue & 0xFF0000) >> 16)/255.0
-                                                 green:((rgbValue & 0x00FF00) >> 8)/255.0
-                                                  blue:(rgbValue & 0x0000FF)/255.0
-                                                 alpha:1.0];
-                [colors addObject:(id)color.CGColor];
-            }
-        }
-    }
-    if (colors.count == 0) {
-        [colors addObject:(id)[UIColor colorWithRed:1.0 green:0.4 blue:0.6 alpha:1.0].CGColor];
-        [colors addObject:(id)[UIColor colorWithRed:1.0 green:0.7 blue:0.3 alpha:1.0].CGColor];
-        [colors addObject:(id)[UIColor colorWithRed:0.5 green:0.9 blue:0.7 alpha:1.0].CGColor];
-        [colors addObject:(id)[UIColor colorWithRed:0.4 green:0.7 blue:1.0 alpha:1.0].CGColor];
-        [colors addObject:(id)[UIColor colorWithRed:0.8 green:0.5 blue:1.0 alpha:1.0].CGColor];
-    }
-    
-    // 边框颜色动画
-    CAKeyframeAnimation *borderAnim = [CAKeyframeAnimation animationWithKeyPath:@"borderColor"];
-    borderAnim.values = colors;
-    borderAnim.duration = 10.0 / animationSpeed;
-    borderAnim.repeatCount = HUGE_VALF;
-    borderAnim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
-    [self.layer addAnimation:borderAnim forKey:@"borderColorAnimation"];
-    
-    // 阴影颜色动画
-    CAKeyframeAnimation *shadowAnim = [CAKeyframeAnimation animationWithKeyPath:@"shadowColor"];
-    shadowAnim.values = colors;
-    shadowAnim.duration = 10.0 / animationSpeed;
-    shadowAnim.repeatCount = HUGE_VALF;
-    shadowAnim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
-    [self.layer addAnimation:shadowAnim forKey:@"shadowColorAnimation"];
-    
-    objc_setAssociatedObject(self, kEffectsAppliedKey, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
-%end
 
 %hook PLPlatterView
 
@@ -110,6 +28,25 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     
     BOOL enableEffect = [[prefs objectForKey:@"EnablePlatterEffect"] boolValue] ?: YES;
     if (!enableEffect) return;
+    
+    // 找 NCNotificationListSupplementaryHostingView 子视图（原版就是这么做的！）
+    UIView *targetView = nil;
+    Class targetClass = NSClassFromString(@"NCNotificationListSupplementaryHostingView");
+    if (targetClass) {
+        NSMutableArray *queue = [NSMutableArray arrayWithArray:self.subviews];
+        while (queue.count > 0 && !targetView) {
+            UIView *view = [queue firstObject];
+            [queue removeObjectAtIndex:0];
+            if ([view isKindOfClass:targetClass]) {
+                targetView = view;
+                break;
+            }
+            [queue addObjectsFromArray:view.subviews];
+        }
+    }
+    
+    // 找不到就用自己
+    if (!targetView) targetView = self;
     
     // 判断是不是音乐播放器
     BOOL isMusic = NO;
@@ -145,13 +82,13 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     CGFloat shadowRadius = [[prefs objectForKey:@"PlatterShadowRadius"] floatValue] ?: 5;
     CGFloat animationSpeed = [[prefs objectForKey:@"PlatterShadowAnimationSpeed"] floatValue] ?: 3;
     
-    // 直接改自己的 layer（原版就是这么做的！）
-    self.layer.cornerRadius = cornerRadius;
-    self.layer.masksToBounds = NO;
-    self.layer.borderWidth = borderWidth;
-    self.layer.shadowOffset = CGSizeMake(0, shadowOffsetY);
-    self.layer.shadowRadius = shadowRadius;
-    self.layer.shadowOpacity = 0.8;
+    // 给目标视图应用效果（原版就是给 NCNotificationListSupplementaryHostingView 应用效果！）
+    targetView.layer.cornerRadius = cornerRadius;
+    targetView.layer.masksToBounds = NO;
+    targetView.layer.borderWidth = borderWidth;
+    targetView.layer.shadowOffset = CGSizeMake(0, shadowOffsetY);
+    targetView.layer.shadowRadius = shadowRadius;
+    targetView.layer.shadowOpacity = 0.8;
     
     // 解析颜色
     NSString *presetStr = [prefs objectForKey:@"ColorPresets"];
@@ -187,7 +124,7 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     borderAnim.duration = 10.0 / animationSpeed;
     borderAnim.repeatCount = HUGE_VALF;
     borderAnim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
-    [self.layer addAnimation:borderAnim forKey:@"borderColorAnimation"];
+    [targetView.layer addAnimation:borderAnim forKey:@"borderColorAnimation"];
     
     // 阴影颜色动画
     CAKeyframeAnimation *shadowAnim = [CAKeyframeAnimation animationWithKeyPath:@"shadowColor"];
@@ -195,7 +132,7 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     shadowAnim.duration = 10.0 / animationSpeed;
     shadowAnim.repeatCount = HUGE_VALF;
     shadowAnim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
-    [self.layer addAnimation:shadowAnim forKey:@"shadowColorAnimation"];
+    [targetView.layer addAnimation:shadowAnim forKey:@"shadowColorAnimation"];
     
     // 音乐播放器加频谱和光圈
     if (isMusic) {
