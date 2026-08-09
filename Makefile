@@ -12,7 +12,9 @@ musicfg_FRAMEWORKS = UIKit QuartzCore MediaPlayer
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
-# 打包前把文件移到 rootless 路径
 after-stage::
-	mkdir -p $(THEOS_STAGING_DIR)/var/jb
-	mv $(THEOS_STAGING_DIR)/Library $(THEOS_STAGING_DIR)/var/jb/
+	mkdir -p $(THEOS_STAGING_DIR)/var/jb/Library
+	@if [ -d "$(THEOS_STAGING_DIR)/Library" ]; then \
+		cp -a $(THEOS_STAGING_DIR)/Library/. $(THEOS_STAGING_DIR)/var/jb/Library/; \
+		rm -rf $(THEOS_STAGING_DIR)/Library; \
+	fi
