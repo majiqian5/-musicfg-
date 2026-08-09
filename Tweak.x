@@ -12,6 +12,10 @@ static const char *kSpectrumViewKey = "kSpectrumViewKey";
 static const char *kAuroraRingViewKey = "kAuroraRingViewKey";
 static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
 
+// 声明 MTMaterialView 是 UIView 的子类
+@interface MTMaterialView : UIView
+@end
+
 @interface UIView (MusicFG)
 - (UIView *)findSuperviewOfClass:(Class)cls;
 - (BOOL)isMusicPlatter;
