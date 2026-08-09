@@ -27,13 +27,22 @@ jobs:
       
       - name: Install Tools
         run: |
-          brew install dpkg ldid
+          brew install dpkg ldid plutil
       
       - name: Build
         run: |
           export THEOS=~/theos
           export PATH="$THEOS/bin:$PATH"
           make package FINALPACKAGE=1
+          
+          # 调试：查看 dylib 架构
+          echo "=== Dylib Architecture ==="
+          file .theos/obj/iphone_arm64e/musicfg.dylib
+          
+          # 把 filter plist 转成二进制格式（和原版一样）
+          echo "=== Converting plist to binary ==="
+          plutil -convert binary1 .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist
+          
           ls -lh packages/
       
       - name: Upload
