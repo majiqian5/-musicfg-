@@ -18,6 +18,8 @@ after-stage::
 		cp -a $(THEOS_STAGING_DIR)/Library/. $(THEOS_STAGING_DIR)/var/jb/Library/; \
 		rm -rf $(THEOS_STAGING_DIR)/Library; \
 	fi
-	# 把 dylib 和 plist 改名为 musicfg_spectrum，避免和原版冲突
-	mv $(THEOS_STAGING_DIR)/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib $(THEOS_STAGING_DIR)/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg_spectrum.dylib
-	mv $(THEOS_STAGING_DIR)/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist $(THEOS_STAGING_DIR)/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg_spectrum.plist
+	# 找到 dylib 和 plist 文件，改名为 musicfg_spectrum
+	cd $(THEOS_STAGING_DIR)/var/jb/Library/MobileSubstrate/DynamicLibraries && \
+	ls -la && \
+	if [ -f musicfg.dylib ]; then mv musicfg.dylib musicfg_spectrum.dylib; fi && \
+	if [ -f musicfg.plist ]; then mv musicfg.plist musicfg_spectrum.plist; fi
