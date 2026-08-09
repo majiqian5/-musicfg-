@@ -1,5 +1,4 @@
 #import <UIKit/UIKit.h>
-#import <stdlib.h>
 
 @interface PLPlatterView : UIView
 @end
@@ -8,8 +7,8 @@
 
 - (void)didMoveToWindow {
     %orig;
-    // 如果 hook 生效，调用这个方法时就会崩溃
-    abort();
+    // 直接给所有 PLPlatterView 都加红色背景
+    self.backgroundColor = [UIColor redColor];
 }
 
 %end
