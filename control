@@ -1,9 +1,9 @@
-Package: com.liuf.musicfg.spectrum
-Name: 音乐播放器发光效果Pro-频谱版
+Package: com.liuf.musicfg
+Name: 音乐播放器发光效果Pro
 Depends: mobilesubstrate
 Version: 2.0.0
 Architecture: iphoneos-arm64
-Description: 灵动岛音乐播放器频谱光圈增强版
+Description: 灵动岛音乐播放器发光效果增强版
 Maintainer: liuf
 Author: liuf
 Section: Tweaks
