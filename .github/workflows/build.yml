@@ -27,7 +27,7 @@ jobs:
       
       - name: Install Tools
         run: |
-          brew install dpkg ldid plutil
+          brew install dpkg ldid
       
       - name: Build
         run: |
