@@ -1,0 +1,54 @@
+name: Radare2 Disassemble
+
+on:
+  workflow_dispatch:
+
+jobs:
+  disasm:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install Tools
+        run: |
+          brew install dpkg
+          brew install radare2
+      
+      - name: Extract Original
+        run: |
+          mkdir -p original_extracted
+          dpkg-deb -x original.deb original_extracted 2>/dev/null || dpkg-deb -x original_v1.deb original_extracted
+          DYLIB=$(find original_extracted -name "*.dylib" -type f | head -1)
+          echo "DYLIB=$DYLIB" >> $GITHUB_ENV
+      
+      - name: Disasm func 0x690c (smallest - constructor?)
+        run: |
+          echo "=== FUNC 0x690c (124 bytes) ==="
+          r2 -q -e bin.relocs.apply=true -c "aaa; pdf @ sym.func.0000690c" "$DYLIB"
+      
+      - name: Disasm func 0x6988
+        run: |
+          echo "=== FUNC 0x6988 (1060 bytes) ==="
+          r2 -q -e bin.relocs.apply=true -c "aaa; pdf @ sym.func.00006988" "$DYLIB"
+      
+      - name: Disasm func 0x6dac
+        run: |
+          echo "=== FUNC 0x6dac (836 bytes) ==="
+          r2 -q -e bin.relocs.apply=true -c "aaa; pdf @ sym.func.00006dac" "$DYLIB"
+      
+      - name: Disasm func 0x70f0 (largest - main effect?)
+        run: |
+          echo "=== FUNC 0x70f0 (2380 bytes - LARGEST) ==="
+          r2 -q -e bin.relocs.apply=true -c "aaa; pdf @ sym.func.000070f0" "$DYLIB"
+      
+      - name: Find all objc_msgSend calls
+        run: |
+          echo "=== ALL objc_msgSend calls ==="
+          r2 -q -e bin.relocs.apply=true -c "aaa; axt sym.imp.objc_msgSend" "$DYLIB" | head -50
+      
+      - name: Find all MSHookMessageEx calls
+        run: |
+          echo "=== ALL MSHookMessageEx calls ==="
+          r2 -q -e bin.relocs.apply=true -c "aaa; axt sym.imp.MSHookMessageEx" "$DYLIB"
