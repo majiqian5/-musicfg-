@@ -61,10 +61,10 @@ jobs:
           echo "=== Converting plist to binary ==="
           plutil -convert binary1 .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist
           
-          # 重新打包
+          # 重新打包（目录在前，输出文件在后）
           echo "=== Repackaging ==="
           cd .theos/_
-          dpkg-deb -b ../../packages/com.liuf.musicfg_2.0.0_iphoneos-arm64.deb .
+          dpkg-deb -b . ../../packages/com.liuf.musicfg_2.0.0_iphoneos-arm64.deb
           cd ../..
           
           ls -lh packages/
