@@ -29,24 +29,6 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     BOOL enableEffect = [[prefs objectForKey:@"EnableNotificationEffect"] boolValue] ?: YES;
     if (!enableEffect) return;
     
-    // 找材质视图
-    UIView *materialView = nil;
-    Class matClass = NSClassFromString(@"MTMaterialView");
-    if (matClass) {
-        NSMutableArray *queue = [NSMutableArray arrayWithArray:self.subviews];
-        while (queue.count > 0 && !materialView) {
-            UIView *view = [queue firstObject];
-            [queue removeObjectAtIndex:0];
-            if ([view isKindOfClass:matClass]) {
-                materialView = view;
-                break;
-            }
-            [queue addObjectsFromArray:view.subviews];
-        }
-    }
-    
-    UIView *targetView = materialView ? materialView : self;
-    
     // 判断是不是音乐播放器
     BOOL isMusic = NO;
     for (UIView *subview in self.subviews) {
@@ -81,13 +63,13 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     CGFloat shadowRadius = [[prefs objectForKey:@"NotificationShadowRadius"] floatValue] ?: 5;
     CGFloat animationSpeed = [[prefs objectForKey:@"NotificationShadowAnimationSpeed"] floatValue] ?: 3;
     
-    // 应用基础效果
-    targetView.layer.cornerRadius = cornerRadius;
-    targetView.layer.masksToBounds = NO;
-    targetView.layer.borderWidth = borderWidth;
-    targetView.layer.shadowOffset = CGSizeMake(0, shadowOffsetY);
-    targetView.layer.shadowRadius = shadowRadius;
-    targetView.layer.shadowOpacity = 0.8;
+    // 直接改自己的 layer（原版就是这么做的！）
+    self.layer.cornerRadius = cornerRadius;
+    self.layer.masksToBounds = NO;
+    self.layer.borderWidth = borderWidth;
+    self.layer.shadowOffset = CGSizeMake(0, shadowOffsetY);
+    self.layer.shadowRadius = shadowRadius;
+    self.layer.shadowOpacity = 0.8;
     
     // 解析颜色
     NSString *presetStr = [prefs objectForKey:@"ColorPresets"];
@@ -123,7 +105,7 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     borderAnim.duration = 10.0 / animationSpeed;
     borderAnim.repeatCount = HUGE_VALF;
     borderAnim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
-    [targetView.layer addAnimation:borderAnim forKey:@"borderColorAnimation"];
+    [self.layer addAnimation:borderAnim forKey:@"borderColorAnimation"];
     
     // 阴影颜色动画
     CAKeyframeAnimation *shadowAnim = [CAKeyframeAnimation animationWithKeyPath:@"shadowColor"];
@@ -131,7 +113,7 @@ static const char *kEffectsAppliedKey = "kEffectsAppliedKey";
     shadowAnim.duration = 10.0 / animationSpeed;
     shadowAnim.repeatCount = HUGE_VALF;
     shadowAnim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
-    [targetView.layer addAnimation:shadowAnim forKey:@"shadowColorAnimation"];
+    [self.layer addAnimation:shadowAnim forKey:@"shadowColorAnimation"];
     
     // 音乐播放器加频谱和光圈
     if (isMusic) {
