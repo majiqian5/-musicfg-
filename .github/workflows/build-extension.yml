@@ -560,11 +560,11 @@ static const char *kAuroraRingViewKey = "kAuroraRingViewKey";
 - (void)applyBaseEffects:(id)prefs {
     %orig;
     
-    // 先加一个绿色边框，证明扩展生效了
+    // 绿色边框，证明扩展生效
     self.layer.borderWidth = 5;
     self.layer.borderColor = [UIColor greenColor].CGColor;
     
-    // 添加频谱视图
+    // 添加频谱
     SpectrumView *spectrumView = objc_getAssociatedObject(self, kSpectrumViewKey);
     if (!spectrumView) {
         CGRect bounds = self.bounds;
@@ -579,7 +579,7 @@ static const char *kAuroraRingViewKey = "kAuroraRingViewKey";
         [spectrumView startAnimation];
     }
     
-    // 添加光圈视图
+    // 添加光圈
     AuroraRingView *ringView = objc_getAssociatedObject(self, kAuroraRingViewKey);
     if (!ringView) {
         CGRect bounds = self.bounds;
