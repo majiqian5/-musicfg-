@@ -1,0 +1,57 @@
+name: Detailed Analysis
+
+on:
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install Tools
+        run: |
+          brew install dpkg
+      
+      - name: Extract Original
+        run: |
+          mkdir -p original_extracted
+          dpkg-deb -x original.deb original_extracted
+      
+      - name: ObjC Classes
+        run: |
+          DYLIB=original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          echo "=== All ObjC classes ==="
+          otool -oV $DYLIB | grep -A2 "name 0x" | grep -v "name 0x" | head -30
+          
+          echo ""
+          echo "=== PLPlatterView category ==="
+          otool -oV $DYLIB | grep -B5 -A20 "PLPlatterView" | head -50
+      
+      - name: All Methods
+        run: |
+          DYLIB=original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          echo "=== All method names ==="
+          otool -oV $DYLIB | grep "name 0x" | head -80
+      
+      - name: Class Dump
+        run: |
+          DYLIB=original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          echo "=== Full objc dump (first 200 lines) ==="
+          otool -oV $DYLIB | head -200
+      
+      - name: Symbols
+        run: |
+          DYLIB=original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          echo "=== All symbols ==="
+          nm -gU $DYLIB | head -50
+          
+          echo ""
+          echo "=== Undefined symbols ==="
+          nm -u $DYLIB | head -50
