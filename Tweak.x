@@ -1,20 +1,16 @@
 #import <UIKit/UIKit.h>
-#import <QuartzCore/QuartzCore.h>
 
-@interface PLPlatterView : UIView
-- (UIView *)contentView;
-@end
+%hook UIView
 
-%hook PLPlatterView
-
-- (void)didMoveToWindow {
+- (void)layoutSubviews {
     %orig;
     
-    if (!self.window) return;
+    Class platterClass = NSClassFromString(@"PLPlatterView");
+    if (!platterClass) return;
+    if (![self isKindOfClass:platterClass]) return;
     
-    // 直接改 contentView 的背景色
-    UIView *contentView = [self contentView];
-    contentView.backgroundColor = [UIColor greenColor];
+    // 直接改成绿色，layoutSubviews 每次都调用，绝对不会被覆盖
+    self.backgroundColor = [UIColor greenColor];
 }
 
 %end
