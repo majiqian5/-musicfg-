@@ -1,16 +1,30 @@
 #import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
 
-%hook UIView
+@interface PLPlatterView : UIView
+@end
 
-- (void)layoutSubviews {
+%hook PLPlatterView
+
+- (void)didMoveToWindow {
     %orig;
     
-    Class platterClass = NSClassFromString(@"PLPlatterView");
-    if (!platterClass) return;
-    if (![self isKindOfClass:platterClass]) return;
+    if (!self.window) return;
     
-    // 直接改成绿色，layoutSubviews 每次都调用，绝对不会被覆盖
-    self.backgroundColor = [UIColor greenColor];
+    // 遍历子视图，找到材质视图 MTMaterialView
+    for (UIView *subview in self.subviews) {
+        if ([NSStringFromClass([subview class]) containsString:@"Material"]) {
+            // 找到材质视图了，改成绿色背景 + 红色边框
+            subview.backgroundColor = [UIColor greenColor];
+            subview.layer.borderWidth = 5;
+            subview.layer.borderColor = [UIColor redColor].CGColor;
+            subview.layer.shadowColor = [UIColor redColor].CGColor;
+            subview.layer.shadowOffset = CGSizeZero;
+            subview.layer.shadowRadius = 20;
+            subview.layer.shadowOpacity = 1.0;
+            subview.layer.masksToBounds = NO;
+        }
+    }
 }
 
 %end
