@@ -14,13 +14,8 @@ jobs:
       - name: Install Tools
         run: |
           brew install dpkg
-          brew install radare2 || echo "radare2 install failed, trying alternative"
-          
-          # 尝试用 pip 安装 r2pipe
-          pip3 install r2pipe 2>/dev/null || true
-          
+          brew install radare2 || echo "radare2 install failed"
           which r2
-          r2 -v
       
       - name: Extract Original
         run: |
@@ -32,35 +27,26 @@ jobs:
       - name: List All Functions
         run: |
           echo "=== ALL FUNCTIONS ==="
-          r2 -q -c "afl" "$DYLIB" | sort
+          r2 -q -e bin.relocs.apply=true -c "afl" "$DYLIB" | sort
       
       - name: Find Hook Functions
         run: |
           echo "=== HOOK RELATED ==="
-          r2 -q -c "afl~hook" "$DYLIB" || true
-          r2 -q -c "afl~MSHook" "$DYLIB" || true
-          r2 -q -c "afl~msgSend" "$DYLIB" || true
+          r2 -q -e bin.relocs.apply=true -c "afl~hook" "$DYLIB" || true
+          r2 -q -e bin.relocs.apply=true -c "afl~MSHook" "$DYLIB" || true
       
       - name: Find didMoveToWindow
         run: |
           echo "=== didMoveToWindow ==="
-          r2 -q -c "afl~didMove" "$DYLIB" || true
-          r2 -q -c "afl~moveToWindow" "$DYLIB" || true
+          r2 -q -e bin.relocs.apply=true -c "afl~didMove" "$DYLIB" || true
+          r2 -q -e bin.relocs.apply=true -c "afl~moveToWindow" "$DYLIB" || true
       
       - name: Find PLPlatterView
         run: |
           echo "=== PLPlatterView ==="
-          r2 -q -c "iz~PLPlatterView" "$DYLIB" || true
+          r2 -q -e bin.relocs.apply=true -c "iz~PLPlatterView" "$DYLIB" || true
       
-      - name: Disassemble Constructor
+      - name: Disassemble Entry
         run: |
-          echo "=== CONSTRUCTOR ==="
-          # 找 constructor 函数
-          r2 -q -c "afl~init" "$DYLIB" | head -20
-          r2 -q -c "afl~constructor" "$DYLIB" | head -20
-          r2 -q -c "afl~_mod" "$DYLIB" | head -20
-      
-      - name: All Strings
-        run: |
-          echo "=== ALL STRINGS ==="
-          r2 -q -c "iz" "$DYLIB" | sort
+          echo "=== ENTRY / CONSTRUCTOR ==="
+          r2 -q -e bin.relocs.apply=true -c "iE" "$DYLIB" | head -30
