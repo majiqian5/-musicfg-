@@ -1,0 +1,134 @@
+name: Build Extension
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install Theos
+        run: |
+          export THEOS=~/theos
+          git clone --depth 1 --recursive https://github.com/theos/theos.git $THEOS
+          echo "THEOS=$THEOS" >> $GITHUB_ENV
+      
+      - name: Get SDK
+        run: |
+          export THEOS=~/theos
+          git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git /tmp/sdks
+          cp -r /tmp/sdks/iPhoneOS16.5.sdk $THEOS/sdks/
+      
+      - name: Install Tools
+        run: |
+          brew install dpkg ldid
+      
+      - name: Create Extension Files
+        run: |
+          # 创建 Tweak.x
+          cat > TweakExtension.x << 'EOF'
+#import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
+#import <objc/runtime.h>
+
+@interface PLPlatterView : UIView
+- (UIView *)contentView;
+@end
+
+%hook PLPlatterView
+
+- (void)didMoveToWindow {
+    %orig;
+    
+    if (!self.window) return;
+    
+    // 给原版的效果再加一层发光（测试扩展是否生效）
+    self.layer.shadowRadius = 30;
+    self.layer.shadowOpacity = 1.0;
+    
+    // 加一个绿色边框，证明扩展生效了
+    self.layer.borderWidth = 5;
+    self.layer.borderColor = [UIColor greenColor].CGColor;
+}
+
+%end
+EOF
+          
+          # 创建 control 文件
+          cat > control << 'EOF'
+Package: com.liuf.musicfg.extension
+Name: 音乐播放器发光效果Pro扩展
+Depends: mobilesubstrate, com.liuf.musicfg
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: 音乐播放器发光效果Pro扩展功能
+Maintainer: liuf
+Author: liuf
+Section: Tweaks
+EOF
+          
+          # 创建 plist
+          cat > musicfgext.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Filter</key>
+    <dict>
+        <key>Bundles</key>
+        <array>
+            <string>com.apple.springboard</string>
+        </array>
+    </dict>
+</dict>
+</plist>
+EOF
+      
+      - name: Build
+        run: |
+          export THEOS=~/theos
+          export PATH="$THEOS/bin:$PATH"
+          
+          # 用 Theos 编译
+          export TWEAK_NAME=musicfgext
+          export ARCHS=arm64e
+          export TARGET=iphone:clang:16.5:14.0
+          export INSTALL_TARGET_PROCESSES=SpringBoard
+          
+          # 手动编译
+          $THEOS/bin/logos.plist TweakExtension.x > TweakExtension.m
+          
+          clang -arch arm64e \
+            -isysroot $THEOS/sdks/iPhoneOS16.5.sdk \
+            -miphoneos-version-min=14.0 \
+            -fobjc-arc \
+            -shared \
+            -undefined dynamic_lookup \
+            -o musicfgext.dylib \
+            TweakExtension.m
+          
+          # 签名
+          ldid -S musicfgext.dylib
+          
+          # 打包
+          mkdir -p layout/var/jb/Library/MobileSubstrate/DynamicLibraries
+          cp musicfgext.dylib layout/var/jb/Library/MobileSubstrate/DynamicLibraries/
+          plutil -convert binary1 musicfgext.plist -o layout/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfgext.plist
+          
+          mkdir -p layout/DEBIAN
+          cp control layout/DEBIAN/control
+          
+          mkdir -p packages
+          dpkg-deb -b layout packages/musicfg_extension.deb
+          
+          ls -lh packages/
+      
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-deb
+          path: packages/*.deb
