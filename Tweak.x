@@ -1,19 +1,11 @@
 #import <UIKit/UIKit.h>
-#import <objc/runtime.h>
 
-%hook UIApplication
-
-- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    BOOL result = %orig;
-    
+__attribute__((constructor))
+static void test_initializer() {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        UIWindow *window = application.windows.firstObject;
-        if (window) {
-            window.backgroundColor = [UIColor redColor];
-        }
+        UIWindow *testWindow = [[UIWindow alloc] initWithFrame:CGRectMake(0, 0, 100, 100)];
+        testWindow.backgroundColor = [UIColor redColor];
+        testWindow.windowLevel = UIWindowLevelAlert + 1000;
+        testWindow.hidden = NO;
     });
-    
-    return result;
 }
-
-%end
