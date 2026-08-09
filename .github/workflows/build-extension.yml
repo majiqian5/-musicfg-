@@ -27,38 +27,583 @@ jobs:
         run: |
           brew install dpkg ldid
       
-      - name: Create Extension Files
+      - name: Create Files
         run: |
-          # 创建 Tweak.x
+          # SpectrumView.h
+          cat > SpectrumView.h << 'EOF'
+#import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
+
+@interface SpectrumView : UIView
+@property (nonatomic, assign) NSInteger barCount;
+@property (nonatomic, assign) CGFloat sensitivity;
+@property (nonatomic, assign) CGFloat barWidth;
+@property (nonatomic, assign) CGFloat barSpacing;
+@property (nonatomic, assign) BOOL mirrorMode;
+@property (nonatomic, strong) NSArray *gradientColors;
+@property (nonatomic, assign) BOOL isAnimating;
+- (void)startAnimation;
+- (void)stopAnimation;
+@end
+EOF
+          
+          # SpectrumView.m
+          cat > SpectrumView.m << 'EOF'
+#import "SpectrumView.h"
+#import <MediaPlayer/MediaPlayer.h>
+
+@interface SpectrumView () {
+    CADisplayLink *_displayLink;
+    CGFloat *_phases;
+    CGFloat *_speeds;
+    CGFloat *_amplitudes;
+}
+@property (nonatomic, strong) CAGradientLayer *gradientLayer;
+@property (nonatomic, strong) NSMutableArray *barLayers;
+@end
+
+@implementation SpectrumView
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        _barCount = 12;
+        _sensitivity = 0.7;
+        _barWidth = 4;
+        _barSpacing = 3;
+        _mirrorMode = YES;
+        _isAnimating = NO;
+        _phases = NULL;
+        _speeds = NULL;
+        _amplitudes = NULL;
+        [self setupBars];
+    }
+    return self;
+}
+
+- (void)setupBars {
+    if (_phases) free(_phases);
+    if (_speeds) free(_speeds);
+    if (_amplitudes) free(_amplitudes);
+    
+    _phases = (CGFloat *)malloc(sizeof(CGFloat) * _barCount);
+    _speeds = (CGFloat *)malloc(sizeof(CGFloat) * _barCount);
+    _amplitudes = (CGFloat *)malloc(sizeof(CGFloat) * _barCount);
+    
+    for (NSInteger i = 0; i < _barCount; i++) {
+        _phases[i] = (CGFloat)arc4random_uniform(100) / 100.0 * M_PI * 2;
+        _speeds[i] = 0.02 + (CGFloat)arc4random_uniform(50) / 1000.0;
+        _amplitudes[i] = 0.3 + (CGFloat)arc4random_uniform(70) / 100.0;
+    }
+    
+    for (CALayer *layer in self.barLayers) {
+        [layer removeFromSuperlayer];
+    }
+    self.barLayers = [NSMutableArray array];
+    
+    CGFloat totalWidth = _barCount * _barWidth + (_barCount - 1) * _barSpacing;
+    CGFloat startX = (self.bounds.size.width - totalWidth) / 2;
+    
+    for (NSInteger i = 0; i < _barCount; i++) {
+        CALayer *barLayer = [CALayer layer];
+        barLayer.frame = CGRectMake(startX + i * (_barWidth + _barSpacing),
+                                     self.bounds.size.height / 2,
+                                     _barWidth, 0);
+        barLayer.cornerRadius = _barWidth / 2;
+        barLayer.backgroundColor = [UIColor whiteColor].CGColor;
+        [self.layer addSublayer:barLayer];
+        [self.barLayers addObject:barLayer];
+    }
+    
+    [self applyGradient];
+}
+
+- (void)applyGradient {
+    if (!_gradientColors || _gradientColors.count == 0) {
+        _gradientColors = @[
+            [UIColor colorWithRed:1.0 green:0.4 blue:0.6 alpha:1.0],
+            [UIColor colorWithRed:1.0 green:0.7 blue:0.3 alpha:1.0],
+            [UIColor colorWithRed:0.5 green:0.9 blue:0.7 alpha:1.0],
+            [UIColor colorWithRed:0.4 green:0.7 blue:1.0 alpha:1.0],
+            [UIColor colorWithRed:0.8 green:0.5 blue:1.0 alpha:1.0]
+        ];
+    }
+    
+    self.gradientLayer = [CAGradientLayer layer];
+    self.gradientLayer.frame = self.bounds;
+    
+    NSMutableArray *cgColors = [NSMutableArray array];
+    for (UIColor *color in _gradientColors) {
+        [cgColors addObject:(id)color.CGColor];
+    }
+    self.gradientLayer.colors = cgColors;
+    self.gradientLayer.startPoint = CGPointMake(0, 1);
+    self.gradientLayer.endPoint = CGPointMake(0, 0);
+    
+    CALayer *maskLayer = [CALayer layer];
+    for (CALayer *bar in self.barLayers) {
+        [maskLayer addSublayer:bar];
+    }
+    self.gradientLayer.mask = maskLayer;
+    
+    [self.layer addSublayer:self.gradientLayer];
+}
+
+- (void)startAnimation {
+    if (_isAnimating) return;
+    _isAnimating = YES;
+    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(update:)];
+    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+}
+
+- (void)stopAnimation {
+    if (!_isAnimating) return;
+    _isAnimating = NO;
+    [_displayLink invalidate];
+    _displayLink = nil;
+}
+
+- (void)update:(CADisplayLink *)displayLink {
+    for (NSInteger i = 0; i < _barCount; i++) {
+        _phases[i] += _speeds[i] * _sensitivity;
+        
+        CGFloat centerFactor = 1.0 - fabs((CGFloat)i - _barCount/2.0) / (_barCount/2.0);
+        centerFactor = 0.3 + centerFactor * 0.7;
+        
+        CGFloat height = 0;
+        height += sin(_phases[i]) * _amplitudes[i] * 0.5;
+        height += sin(_phases[i] * 1.5 + 1.0) * _amplitudes[i] * 0.3;
+        height += sin(_phases[i] * 0.7 + 2.0) * _amplitudes[i] * 0.2;
+        
+        height = height * centerFactor * self.bounds.size.height * 0.45;
+        height = MAX(2, height);
+        
+        CALayer *barLayer = self.barLayers[i];
+        
+        if (_mirrorMode) {
+            barLayer.frame = CGRectMake(barLayer.frame.origin.x,
+                                         self.bounds.size.height / 2 - height,
+                                         _barWidth, height * 2);
+        } else {
+            barLayer.frame = CGRectMake(barLayer.frame.origin.x,
+                                         self.bounds.size.height - height,
+                                         _barWidth, height);
+        }
+    }
+}
+
+- (void)setBarCount:(NSInteger)barCount {
+    _barCount = barCount;
+    [self setupBars];
+}
+
+- (void)setBarWidth:(CGFloat)barWidth {
+    _barWidth = barWidth;
+    [self setupBars];
+}
+
+- (void)dealloc {
+    [self stopAnimation];
+    if (_phases) free(_phases);
+    if (_speeds) free(_speeds);
+    if (_amplitudes) free(_amplitudes);
+}
+
+@end
+EOF
+          
+          # AuroraRingView.h
+          cat > AuroraRingView.h << 'EOF'
+#import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
+
+@interface AuroraRingView : UIView
+@property (nonatomic, assign) CGFloat ringWidth;
+@property (nonatomic, assign) CGFloat glowIntensity;
+@property (nonatomic, assign) CGFloat rotationSpeed;
+@property (nonatomic, assign) CGFloat pulseSpeed;
+@property (nonatomic, assign) NSInteger style;
+@property (nonatomic, strong) NSArray *gradientColors;
+@property (nonatomic, assign) BOOL isAnimating;
+- (void)startAnimation;
+- (void)stopAnimation;
+@end
+EOF
+          
+          # AuroraRingView.m
+          cat > AuroraRingView.m << 'EOF'
+#import "AuroraRingView.h"
+#import <MediaPlayer/MediaPlayer.h>
+
+@interface AuroraRingView () {
+    CADisplayLink *_displayLink;
+    CGFloat _phase;
+    CGFloat _rotationAngle;
+}
+@property (nonatomic, strong) CAGradientLayer *gradientRingLayer;
+@end
+
+@implementation AuroraRingView
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        _ringWidth = 3;
+        _glowIntensity = 0.8;
+        _rotationSpeed = 1.0;
+        _pulseSpeed = 1.5;
+        _style = 0;
+        _isAnimating = NO;
+        _phase = 0;
+        _rotationAngle = 0;
+        [self setupRing];
+    }
+    return self;
+}
+
+- (void)setupRing {
+    for (CALayer *layer in self.layer.sublayers) {
+        [layer removeFromSuperlayer];
+    }
+    
+    if (!_gradientColors || _gradientColors.count == 0) {
+        _gradientColors = @[
+            [UIColor colorWithRed:1.0 green:0.4 blue:0.6 alpha:1.0],
+            [UIColor colorWithRed:1.0 green:0.7 blue:0.3 alpha:1.0],
+            [UIColor colorWithRed:0.5 green:0.9 blue:0.7 alpha:1.0],
+            [UIColor colorWithRed:0.4 green:0.7 blue:1.0 alpha:1.0],
+            [UIColor colorWithRed:0.8 green:0.5 blue:1.0 alpha:1.0]
+        ];
+    }
+    
+    CGRect bounds = self.bounds;
+    CGPoint center = CGPointMake(bounds.size.width / 2, bounds.size.height / 2);
+    CGFloat radius = MIN(bounds.size.width, bounds.size.height) / 2 - _ringWidth;
+    
+    UIBezierPath *circlePath = [UIBezierPath bezierPathWithArcCenter:center
+                                                             radius:radius
+                                                         startAngle:0
+                                                           endAngle:M_PI * 2
+                                                          clockwise:YES];
+    
+    switch (_style) {
+        case 0:
+        default:
+            [self setupGradientRotationStyleWithPath:circlePath radius:radius center:center];
+            break;
+        case 1:
+            [self setupPulseStyleWithPath:circlePath radius:radius center:center];
+            break;
+        case 2:
+            [self setupChaseStyleWithPath:circlePath radius:radius center:center];
+            break;
+        case 3:
+            [self setupSparkleStyleWithPath:circlePath radius:radius center:center];
+            break;
+    }
+}
+
+- (void)setupGradientRotationStyleWithPath:(UIBezierPath *)circlePath 
+                                     radius:(CGFloat)radius 
+                                     center:(CGPoint)center {
+    _gradientRingLayer = [CAGradientLayer layer];
+    _gradientRingLayer.frame = self.bounds;
+    
+    NSMutableArray *cgColors = [NSMutableArray array];
+    for (UIColor *color in _gradientColors) {
+        [cgColors addObject:(id)color.CGColor];
+    }
+    _gradientRingLayer.colors = cgColors;
+    _gradientRingLayer.startPoint = CGPointMake(0, 0);
+    _gradientRingLayer.endPoint = CGPointMake(1, 1);
+    _gradientRingLayer.type = kCAGradientLayerConic;
+    
+    CAShapeLayer *maskLayer = [CAShapeLayer layer];
+    maskLayer.path = circlePath.CGPath;
+    maskLayer.fillColor = [UIColor clearColor].CGColor;
+    maskLayer.strokeColor = [UIColor whiteColor].CGColor;
+    maskLayer.lineWidth = _ringWidth;
+    maskLayer.lineCap = kCALineCapRound;
+    
+    _gradientRingLayer.mask = maskLayer;
+    
+    _gradientRingLayer.shadowColor = ((UIColor *)_gradientColors.firstObject).CGColor;
+    _gradientRingLayer.shadowOffset = CGSizeZero;
+    _gradientRingLayer.shadowRadius = 15 * _glowIntensity;
+    _gradientRingLayer.shadowOpacity = _glowIntensity;
+    
+    [self.layer addSublayer:_gradientRingLayer];
+}
+
+- (void)setupPulseStyleWithPath:(UIBezierPath *)circlePath 
+                          radius:(CGFloat)radius 
+                          center:(CGPoint)center {
+    CAShapeLayer *shapeLayer = [CAShapeLayer layer];
+    shapeLayer.path = circlePath.CGPath;
+    shapeLayer.fillColor = [UIColor clearColor].CGColor;
+    shapeLayer.strokeColor = ((UIColor *)_gradientColors.firstObject).CGColor;
+    shapeLayer.lineWidth = _ringWidth;
+    shapeLayer.lineCap = kCALineCapRound;
+    shapeLayer.name = @"mainRing";
+    
+    shapeLayer.shadowColor = ((UIColor *)_gradientColors.firstObject).CGColor;
+    shapeLayer.shadowOffset = CGSizeZero;
+    shapeLayer.shadowRadius = 10 * _glowIntensity;
+    shapeLayer.shadowOpacity = _glowIntensity;
+    
+    [self.layer addSublayer:shapeLayer];
+    
+    CAShapeLayer *pulseLayer = [CAShapeLayer layer];
+    pulseLayer.path = circlePath.CGPath;
+    pulseLayer.fillColor = [UIColor clearColor].CGColor;
+    pulseLayer.strokeColor = ((UIColor *)_gradientColors.firstObject).CGColor;
+    pulseLayer.lineWidth = _ringWidth * 0.5;
+    pulseLayer.opacity = 0.5;
+    pulseLayer.name = @"pulseLayer";
+    
+    pulseLayer.shadowColor = ((UIColor *)_gradientColors.firstObject).CGColor;
+    pulseLayer.shadowOffset = CGSizeZero;
+    pulseLayer.shadowRadius = 8 * _glowIntensity;
+    pulseLayer.shadowOpacity = _glowIntensity * 0.5;
+    
+    [self.layer addSublayer:pulseLayer];
+}
+
+- (void)setupChaseStyleWithPath:(UIBezierPath *)circlePath 
+                          radius:(CGFloat)radius 
+                          center:(CGPoint)center {
+    UIColor *color1 = _gradientColors.firstObject;
+    UIColor *color2 = _gradientColors.count > 1 ? _gradientColors[1] : _gradientColors.firstObject;
+    
+    CAShapeLayer *arc1 = [CAShapeLayer layer];
+    UIBezierPath *arcPath1 = [UIBezierPath bezierPathWithArcCenter:center
+                                                            radius:radius
+                                                        startAngle:-M_PI_2
+                                                          endAngle:-M_PI_2 + M_PI_4
+                                                         clockwise:YES];
+    arc1.path = arcPath1.CGPath;
+    arc1.fillColor = [UIColor clearColor].CGColor;
+    arc1.strokeColor = color1.CGColor;
+    arc1.lineWidth = _ringWidth;
+    arc1.lineCap = kCALineCapRound;
+    arc1.name = @"arc1";
+    
+    arc1.shadowColor = color1.CGColor;
+    arc1.shadowOffset = CGSizeZero;
+    arc1.shadowRadius = 12 * _glowIntensity;
+    arc1.shadowOpacity = _glowIntensity;
+    
+    [self.layer addSublayer:arc1];
+    
+    CAShapeLayer *arc2 = [CAShapeLayer layer];
+    UIBezierPath *arcPath2 = [UIBezierPath bezierPathWithArcCenter:center
+                                                            radius:radius
+                                                        startAngle:M_PI_2
+                                                          endAngle:M_PI_2 + M_PI_4
+                                                         clockwise:YES];
+    arc2.path = arcPath2.CGPath;
+    arc2.fillColor = [UIColor clearColor].CGColor;
+    arc2.strokeColor = color2.CGColor;
+    arc2.lineWidth = _ringWidth;
+    arc2.lineCap = kCALineCapRound;
+    arc2.name = @"arc2";
+    
+    arc2.shadowColor = color2.CGColor;
+    arc2.shadowOffset = CGSizeZero;
+    arc2.shadowRadius = 12 * _glowIntensity;
+    arc2.shadowOpacity = _glowIntensity;
+    
+    [self.layer addSublayer:arc2];
+}
+
+- (void)setupSparkleStyleWithPath:(UIBezierPath *)circlePath 
+                            radius:(CGFloat)radius 
+                            center:(CGPoint)center {
+    CAShapeLayer *baseRing = [CAShapeLayer layer];
+    baseRing.path = circlePath.CGPath;
+    baseRing.fillColor = [UIColor clearColor].CGColor;
+    baseRing.strokeColor = ((UIColor *)_gradientColors.firstObject).CGColor;
+    baseRing.lineWidth = _ringWidth * 0.5;
+    baseRing.opacity = 0.3;
+    
+    [self.layer addSublayer:baseRing];
+    
+    NSInteger sparkCount = 8;
+    for (NSInteger i = 0; i < sparkCount; i++) {
+        CGFloat angle = (CGFloat)i / sparkCount * M_PI * 2;
+        CGFloat x = center.x + radius * cos(angle);
+        CGFloat y = center.y + radius * sin(angle);
+        
+        CALayer *spark = [CALayer layer];
+        spark.bounds = CGRectMake(0, 0, _ringWidth * 2, _ringWidth * 2);
+        spark.position = CGPointMake(x, y);
+        spark.cornerRadius = _ringWidth;
+        spark.backgroundColor = ((UIColor *)_gradientColors[i % _gradientColors.count]).CGColor;
+        spark.name = [NSString stringWithFormat:@"spark_%ld", (long)i];
+        
+        spark.shadowColor = ((UIColor *)_gradientColors[i % _gradientColors.count]).CGColor;
+        spark.shadowOffset = CGSizeZero;
+        spark.shadowRadius = 8 * _glowIntensity;
+        spark.shadowOpacity = _glowIntensity;
+        
+        [self.layer addSublayer:spark];
+    }
+}
+
+- (void)startAnimation {
+    if (_isAnimating) return;
+    _isAnimating = YES;
+    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(update:)];
+    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+}
+
+- (void)stopAnimation {
+    if (!_isAnimating) return;
+    _isAnimating = NO;
+    [_displayLink invalidate];
+    _displayLink = nil;
+}
+
+- (void)update:(CADisplayLink *)displayLink {
+    _phase += 0.02 * _pulseSpeed;
+    _rotationAngle += 0.01 * _rotationSpeed;
+    
+    switch (_style) {
+        case 0:
+            [self updateGradientRotation];
+            break;
+        case 1:
+            [self updatePulse];
+            break;
+        case 2:
+            [self updateChase];
+            break;
+        case 3:
+            [self updateSparkle];
+            break;
+        default:
+            break;
+    }
+}
+
+- (void)updateGradientRotation {
+    _gradientRingLayer.transform = CATransform3DMakeRotation(_rotationAngle, 0, 0, 1);
+    CGFloat pulse = 0.8 + 0.2 * sin(_phase);
+    _gradientRingLayer.shadowOpacity = _glowIntensity * pulse;
+    _gradientRingLayer.shadowRadius = 15 * _glowIntensity * pulse;
+}
+
+- (void)updatePulse {
+    CGFloat pulse = 0.7 + 0.3 * sin(_phase);
+    
+    CALayer *mainRing = [self.layer.sublayers filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"name == 'mainRing'"]].firstObject;
+    if (mainRing) {
+        mainRing.opacity = pulse;
+        mainRing.shadowOpacity = _glowIntensity * pulse;
+    }
+    
+    CALayer *pulseLayer = [self.layer.sublayers filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"name == 'pulseLayer'"]].firstObject;
+    if (pulseLayer) {
+        CGFloat expand = 1 + 0.1 * sin(_phase);
+        pulseLayer.transform = CATransform3DMakeScale(expand, expand, 1);
+        pulseLayer.opacity = 0.5 * (1 - (sin(_phase) + 1) / 2 * 0.7);
+    }
+}
+
+- (void)updateChase {
+    for (CALayer *layer in self.layer.sublayers) {
+        if ([layer.name isEqualToString:@"arc1"]) {
+            layer.transform = CATransform3DMakeRotation(_rotationAngle, 0, 0, 1);
+        } else if ([layer.name isEqualToString:@"arc2"]) {
+            layer.transform = CATransform3DMakeRotation(-_rotationAngle * 1.5, 0, 0, 1);
+        }
+    }
+}
+
+- (void)updateSparkle {
+    NSInteger i = 0;
+    for (CALayer *layer in self.layer.sublayers) {
+        if ([layer.name hasPrefix:@"spark_"]) {
+            CGFloat sparkle = 0.5 + 0.5 * sin(_phase + i * M_PI / 4);
+            layer.opacity = sparkle;
+            layer.shadowOpacity = _glowIntensity * sparkle;
+            i++;
+        }
+    }
+}
+
+- (void)dealloc {
+    [self stopAnimation];
+}
+
+@end
+EOF
+          
+          # TweakExtension.x
           cat > TweakExtension.x << 'EOF'
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
+#import "SpectrumView.h"
+#import "AuroraRingView.h"
+
+static const char *kSpectrumViewKey = "kSpectrumViewKey";
+static const char *kAuroraRingViewKey = "kAuroraRingViewKey";
 
 @interface PLPlatterView : UIView
 - (UIView *)contentView;
+- (void)applyBaseEffects:(id)prefs;
 @end
 
 %hook PLPlatterView
 
-- (void)didMoveToWindow {
+- (void)applyBaseEffects:(id)prefs {
     %orig;
     
-    if (!self.window) return;
-    
-    // 给原版的效果再加一层发光（测试扩展是否生效）
-    self.layer.shadowRadius = 30;
-    self.layer.shadowOpacity = 1.0;
-    
-    // 加一个绿色边框，证明扩展生效了
+    // 先加一个绿色边框，证明扩展生效了
     self.layer.borderWidth = 5;
     self.layer.borderColor = [UIColor greenColor].CGColor;
+    
+    // 添加频谱视图
+    SpectrumView *spectrumView = objc_getAssociatedObject(self, kSpectrumViewKey);
+    if (!spectrumView) {
+        CGRect bounds = self.bounds;
+        spectrumView = [[SpectrumView alloc] initWithFrame:CGRectMake(0, -35, bounds.size.width, 30)];
+        spectrumView.barCount = 12;
+        spectrumView.sensitivity = 0.7;
+        spectrumView.barWidth = 4;
+        spectrumView.mirrorMode = YES;
+        spectrumView.userInteractionEnabled = NO;
+        [self addSubview:spectrumView];
+        objc_setAssociatedObject(self, kSpectrumViewKey, spectrumView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [spectrumView startAnimation];
+    }
+    
+    // 添加光圈视图
+    AuroraRingView *ringView = objc_getAssociatedObject(self, kAuroraRingViewKey);
+    if (!ringView) {
+        CGRect bounds = self.bounds;
+        CGFloat ringSize = MAX(bounds.size.width, bounds.size.height) + 30;
+        CGRect ringFrame = CGRectMake((bounds.size.width - ringSize) / 2, 
+                                       (bounds.size.height - ringSize) / 2,
+                                       ringSize, ringSize);
+        ringView = [[AuroraRingView alloc] initWithFrame:ringFrame];
+        ringView.ringWidth = 3;
+        ringView.glowIntensity = 0.8;
+        ringView.rotationSpeed = 1.0;
+        ringView.pulseSpeed = 1.5;
+        ringView.style = 0;
+        ringView.userInteractionEnabled = NO;
+        [self insertSubview:ringView atIndex:0];
+        objc_setAssociatedObject(self, kAuroraRingViewKey, ringView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [ringView startAnimation];
+    }
 }
 
 %end
 EOF
           
-          # 创建 control 文件
+          # control
           cat > control << 'EOF'
 Package: com.liuf.musicfg.extension
 Name: 音乐播放器发光效果Pro扩展
@@ -71,7 +616,7 @@ Author: liuf
 Section: Tweaks
 EOF
           
-          # 创建 plist
+          # plist
           cat > musicfgext.plist << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -93,15 +638,10 @@ EOF
           export THEOS=~/theos
           export PATH="$THEOS/bin:$PATH"
           
-          # 用 Theos 编译
-          export TWEAK_NAME=musicfgext
-          export ARCHS=arm64e
-          export TARGET=iphone:clang:16.5:14.0
-          export INSTALL_TARGET_PROCESSES=SpringBoard
-          
-          # 手动编译
+          # Logos 处理
           $THEOS/bin/logos.plist TweakExtension.x > TweakExtension.m
           
+          # 编译
           clang -arch arm64e \
             -isysroot $THEOS/sdks/iPhoneOS16.5.sdk \
             -miphoneos-version-min=14.0 \
@@ -109,7 +649,7 @@ EOF
             -shared \
             -undefined dynamic_lookup \
             -o musicfgext.dylib \
-            TweakExtension.m
+            TweakExtension.m SpectrumView.m AuroraRingView.m
           
           # 签名
           ldid -S musicfgext.dylib
