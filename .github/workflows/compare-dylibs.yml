@@ -27,59 +27,58 @@ jobs:
         run: |
           brew install dpkg ldid
       
+      - name: Fix CydiaSubstrate TBD
+        run: |
+          export THEOS=~/theos
+          
+          # 找到 CydiaSubstrate 的 tbd 文件并修改 install name
+          TBD_FILE="$THEOS/lib/CydiaSubstrate.framework/CydiaSubstrate.tbd"
+          if [ -f "$TBD_FILE" ]; then
+            echo "Found tbd at $TBD_FILE"
+            # 把绝对路径改成 @rpath 相对路径
+            sed -i '' 's|/Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate|@rpath/CydiaSubstrate.framework/CydiaSubstrate|g' "$TBD_FILE"
+            echo "Modified tbd:"
+            cat "$TBD_FILE"
+          else
+            echo "TBD not found at expected path, searching..."
+            find $THEOS -name "*.tbd" | grep -i substrate
+          fi
+      
       - name: Build
         run: |
           export THEOS=~/theos
           export PATH="$THEOS/bin:$PATH"
+          
           make package FINALPACKAGE=1
+          
+          # 检查编译结果
+          echo "=== Dependencies ==="
+          otool -L .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          echo ""
+          echo "=== RPATH ==="
+          otool -l .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib | grep -A2 LC_RPATH
       
-      - name: Fix Dylib
+      - name: Add RPath and Package
         run: |
           export OUR_DYLIB=.theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
           
-          echo "=== Before fix ==="
-          otool -L $OUR_DYLIB
-          
-          # 1. 把 CydiaSubstrate 从绝对路径改成 @rpath 相对路径
-          echo "=== Fixing CydiaSubstrate path ==="
-          install_name_tool -change \
-            /Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate \
-            @rpath/CydiaSubstrate.framework/CydiaSubstrate \
-            $OUR_DYLIB
-          
-          # 2. 删掉所有旧的 rpath
-          echo "=== Cleaning old rpaths ==="
-          while otool -l $OUR_DYLIB | grep -q LC_RPATH; do
-            RPATH=$(otool -l $OUR_DYLIB | grep -A2 LC_RPATH | grep path | awk '{print $2}' | head -1)
-            if [ -z "$RPATH" ]; then break; fi
-            install_name_tool -delete_rpath "$RPATH" $OUR_DYLIB 2>/dev/null || break
-          done
-          
-          # 3. 添加原版的 rpath
-          echo "=== Adding original rpaths ==="
+          # 添加 rpath（用 -add_rpath 而不是删除重建，减少修改）
           install_name_tool -add_rpath /var/jb/Library/Frameworks $OUR_DYLIB
           install_name_tool -add_rpath /var/jb/usr/lib $OUR_DYLIB
           install_name_tool -add_rpath @loader_path/.jbroot/Library/Frameworks $OUR_DYLIB
           install_name_tool -add_rpath @loader_path/.jbroot/usr/lib $OUR_DYLIB
           
-          # 4. 把 install name 也改成和原版类似的（可选，但是保险）
-          install_name_tool -id @rpath/musicfg.dylib $OUR_DYLIB
-          
-          # 5. 重新签名
-          echo "=== Re-signing ==="
+          # 重新签名
           ldid -S $OUR_DYLIB
           
-          # 6. 验证
-          echo "=== After fix ==="
-          otool -L $OUR_DYLIB
-          echo "--- RPATH ---"
+          # 验证
+          echo "=== Final RPATH ==="
           otool -l $OUR_DYLIB | grep -A2 LC_RPATH
           
-          # 7. plist 转二进制
+          # plist 转二进制
           plutil -convert binary1 .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist
           
-          # 8. 重新打包
-          echo "=== Repackaging ==="
+          # 重新打包
           cd .theos/_
           dpkg-deb -b . ../../packages/musicfg_fixed.deb
           cd ../..
