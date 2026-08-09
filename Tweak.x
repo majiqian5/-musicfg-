@@ -7,19 +7,23 @@
 static const char *kSpectrumViewKey = "kSpectrumViewKey";
 static const char *kAuroraRingViewKey = "kAuroraRingViewKey";
 
-@interface PLPlatterView : UIView
-- (UIView *)contentView;
-- (void)applyBaseEffects:(id)prefs;
-@end
+%hook UIView
 
-%hook PLPlatterView
-
-- (void)applyBaseEffects:(id)prefs {
+- (void)didMoveToWindow {
     %orig;
     
-    // 绿色边框，证明生效了
+    // 只处理 PLPlatterView 及其子类
+    if (![self isKindOfClass:NSClassFromString(@"PLPlatterView")]) return;
+    if (!self.window) return;
+    
+    // 绿色粗边框，一眼就能看到有没有生效
     self.layer.borderWidth = 5;
     self.layer.borderColor = [UIColor greenColor].CGColor;
+    self.layer.shadowColor = [UIColor greenColor].CGColor;
+    self.layer.shadowOffset = CGSizeZero;
+    self.layer.shadowRadius = 20;
+    self.layer.shadowOpacity = 1.0;
+    self.layer.masksToBounds = NO;
     
     // 添加频谱
     SpectrumView *spectrumView = objc_getAssociatedObject(self, kSpectrumViewKey);
