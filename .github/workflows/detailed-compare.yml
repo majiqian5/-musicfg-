@@ -1,0 +1,77 @@
+name: Detailed Compare
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install Theos
+        run: |
+          export THEOS=~/theos
+          git clone --depth 1 --recursive https://github.com/theos/theos.git $THEOS
+          echo "THEOS=$THEOS" >> $GITHUB_ENV
+      
+      - name: Get SDK
+        run: |
+          export THEOS=~/theos
+          git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git /tmp/sdks
+          cp -r /tmp/sdks/iPhoneOS16.5.sdk $THEOS/sdks/
+      
+      - name: Install Tools
+        run: |
+          brew install dpkg ldid
+      
+      - name: Build Our Dylib
+        run: |
+          export THEOS=~/theos
+          export PATH="$THEOS/bin:$PATH"
+          export LDFLAGS="-undefined dynamic_lookup"
+          make package FINALPACKAGE=1
+      
+      - name: Extract Original
+        run: |
+          mkdir -p original_extracted
+          dpkg-deb -x original.deb original_extracted
+      
+      - name: Compare Headers
+        run: |
+          echo "=== Original dylib info ==="
+          otool -h original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          echo ""
+          echo "=== Our dylib info ==="
+          otool -h .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+      
+      - name: Compare Load Commands
+        run: |
+          echo "=== Original load commands ==="
+          otool -l original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib > /tmp/original_lc.txt
+          wc -l /tmp/original_lc.txt
+          echo ""
+          echo "=== Our load commands ==="
+          otool -l .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib > /tmp/our_lc.txt
+          wc -l /tmp/our_lc.txt
+          echo ""
+          echo "=== Diff ==="
+          diff /tmp/original_lc.txt /tmp/our_lc.txt || echo "Files differ"
+      
+      - name: Compare Symbols
+        run: |
+          echo "=== Original exported symbols ==="
+          nm -gU original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib | head -30
+          echo ""
+          echo "=== Our exported symbols ==="
+          nm -gU .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib | head -30
+      
+      - name: Compare Sections
+        run: |
+          echo "=== Original sections ==="
+          otool -S original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          echo ""
+          echo "=== Our sections ==="
+          otool -S .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
