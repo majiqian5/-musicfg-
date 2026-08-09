@@ -1,0 +1,60 @@
+name: Class Dump Original
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dump:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install class-dump
+        run: |
+          brew install dpkg
+          # 下载 class-dump
+          curl -L -o /tmp/class-dump.dmg "https://github.com/nygard/class-dump/releases/download/3.5/class-dump-3.5.dmg" 2>/dev/null || true
+          
+          # 用 otool 详细分析
+          echo "otool available: $(which otool)"
+      
+      - name: Extract Original
+        run: |
+          mkdir -p original_extracted
+          dpkg-deb -x original.deb original_extracted 2>/dev/null || dpkg-deb -x original_v1.deb original_extracted
+      
+      - name: Find dylib
+        run: |
+          find original_extracted -name "*.dylib" -type f
+      
+      - name: ObjC Class Dump
+        run: |
+          DYLIB=$(find original_extracted -name "*.dylib" -type f | head -1)
+          echo "Dylib: $DYLIB"
+          echo ""
+          echo "=== ALL OBJC CLASSES ==="
+          otool -oV "$DYLIB" | grep -E "^\s*name 0x" | awk '{print $3}' | sort -u
+          
+          echo ""
+          echo "=== ALL METHODS ==="
+          otool -oV "$DYLIB" | grep -E "name 0x" | awk '{print $3}' | grep -v "^_" | sort -u
+      
+      - name: Detailed PLPlatterView
+        run: |
+          DYLIB=$(find original_extracted -name "*.dylib" -type f | head -1)
+          echo "=== PLPlatterView details ==="
+          otool -oV "$DYLIB" | grep -B5 -A100 "PLPlatterView" | head -150
+      
+      - name: Detailed MTMaterialView
+        run: |
+          DYLIB=$(find original_extracted -name "*.dylib" -type f | head -1)
+          echo "=== MTMaterialView details ==="
+          otool -oV "$DYLIB" | grep -B5 -A100 "MTMaterialView" | head -150
+      
+      - name: All Strings
+        run: |
+          DYLIB=$(find original_extracted -name "*.dylib" -type f | head -1)
+          echo "=== All strings ==="
+          strings "$DYLIB" | sort -u
