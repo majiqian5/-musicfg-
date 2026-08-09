@@ -1,0 +1,45 @@
+name: Test Original Repack
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install Tools
+        run: |
+          brew install dpkg ldid
+      
+      - name: Extract Original DEB
+        run: |
+          mkdir -p original_extracted
+          dpkg-deb -x original.deb original_extracted
+          dpkg-deb -e original.deb original_extracted/DEBIAN
+          
+          echo "=== Original Dylib Info ==="
+          file original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          echo "=== Original Entitlements ==="
+          ldid -e original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib || echo "No entitlements or ldid failed"
+          
+          echo "=== Original Plist Info ==="
+          file original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist
+          
+          ls -lh original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/
+      
+      - name: Repack Without Changes
+        run: |
+          mkdir -p packages
+          dpkg-deb -b original_extracted packages/musicfg_original_repacked.deb
+          ls -lh packages/
+      
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-repacked
+          path: packages/*.deb
