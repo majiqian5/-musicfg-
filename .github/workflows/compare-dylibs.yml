@@ -1,10 +1,10 @@
-name: Compare Dylibs
+name: Fix Dylib
 
 on:
   workflow_dispatch:
 
 jobs:
-  compare:
+  fix:
     runs-on: macos-latest
     
     steps:
@@ -27,72 +27,61 @@ jobs:
         run: |
           brew install dpkg ldid
       
-      - name: Build Our Dylib
+      - name: Build
         run: |
           export THEOS=~/theos
           export PATH="$THEOS/bin:$PATH"
           make package FINALPACKAGE=1
       
-      - name: Extract Original
+      - name: Fix Dylib
         run: |
-          mkdir -p original_extracted
-          dpkg-deb -x original.deb original_extracted
-      
-      - name: Compare Dylibs
-        run: |
-          echo "=== Original Dylib ==="
-          echo "--- Dependencies ---"
-          otool -L original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
-          echo ""
-          echo "--- RPATH ---"
-          otool -l original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib | grep -A2 LC_RPATH
-          echo ""
-          echo "--- Install Name ---"
-          otool -D original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
-          
-          echo ""
-          echo "=== Our Dylib ==="
-          echo "--- Dependencies ---"
-          otool -L .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
-          echo ""
-          echo "--- RPATH ---"
-          otool -l .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib | grep -A2 LC_RPATH
-          echo ""
-          echo "--- Install Name ---"
-          otool -D .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
-      
-      - name: Fix Our Dylib
-        run: |
-          # 复制原版的 rpath 设置
           export OUR_DYLIB=.theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
           
-          # 先删掉所有现有的 rpath
-          echo "=== Cleaning up rpaths ==="
+          echo "=== Before fix ==="
+          otool -L $OUR_DYLIB
+          
+          # 1. 把 CydiaSubstrate 从绝对路径改成 @rpath 相对路径
+          echo "=== Fixing CydiaSubstrate path ==="
+          install_name_tool -change \
+            /Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate \
+            @rpath/CydiaSubstrate.framework/CydiaSubstrate \
+            $OUR_DYLIB
+          
+          # 2. 删掉所有旧的 rpath
+          echo "=== Cleaning old rpaths ==="
           while otool -l $OUR_DYLIB | grep -q LC_RPATH; do
             RPATH=$(otool -l $OUR_DYLIB | grep -A2 LC_RPATH | grep path | awk '{print $2}' | head -1)
             if [ -z "$RPATH" ]; then break; fi
             install_name_tool -delete_rpath "$RPATH" $OUR_DYLIB 2>/dev/null || break
           done
           
-          # 添加原版的 rpath
+          # 3. 添加原版的 rpath
           echo "=== Adding original rpaths ==="
           install_name_tool -add_rpath /var/jb/Library/Frameworks $OUR_DYLIB
           install_name_tool -add_rpath /var/jb/usr/lib $OUR_DYLIB
           install_name_tool -add_rpath @loader_path/.jbroot/Library/Frameworks $OUR_DYLIB
           install_name_tool -add_rpath @loader_path/.jbroot/usr/lib $OUR_DYLIB
           
-          # 重新签名
+          # 4. 把 install name 也改成和原版类似的（可选，但是保险）
+          install_name_tool -id @rpath/musicfg.dylib $OUR_DYLIB
+          
+          # 5. 重新签名
           echo "=== Re-signing ==="
           ldid -S $OUR_DYLIB
           
-          # 验证
-          echo "=== Fixed RPATH ==="
+          # 6. 验证
+          echo "=== After fix ==="
+          otool -L $OUR_DYLIB
+          echo "--- RPATH ---"
           otool -l $OUR_DYLIB | grep -A2 LC_RPATH
           
-          # 重新打包
+          # 7. plist 转二进制
+          plutil -convert binary1 .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist
+          
+          # 8. 重新打包
           echo "=== Repackaging ==="
           cd .theos/_
-          dpkg-deb -b . ../../packages/musicfg_fixed_rpath.deb
+          dpkg-deb -b . ../../packages/musicfg_fixed.deb
           cd ../..
           
           ls -lh packages/
@@ -100,5 +89,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: fixed-rpath
-          path: packages/musicfg_fixed_rpath.deb
+          name: musicfg-fixed
+          path: packages/musicfg_fixed.deb
