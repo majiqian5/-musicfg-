@@ -35,7 +35,7 @@ jobs:
           export PATH="$THEOS/bin:$PATH"
           make package FINALPACKAGE=1
           
-          # 创建 entitlements 文件（半越狱需要的权限）
+          # 创建 entitlements 文件
           cat > /tmp/ent.xml << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
