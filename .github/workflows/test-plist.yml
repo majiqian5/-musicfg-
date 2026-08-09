@@ -1,0 +1,75 @@
+name: Test Plist
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install Theos
+        run: |
+          export THEOS=~/theos
+          git clone --depth 1 --recursive https://github.com/theos/theos.git $THEOS
+          echo "THEOS=$THEOS" >> $GITHUB_ENV
+      
+      - name: Get SDK
+        run: |
+          export THEOS=~/theos
+          git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git /tmp/sdks
+          cp -r /tmp/sdks/iPhoneOS16.5.sdk $THEOS/sdks/
+      
+      - name: Install Tools
+        run: |
+          brew install dpkg ldid
+      
+      - name: Build Our Dylib
+        run: |
+          export THEOS=~/theos
+          export PATH="$THEOS/bin:$PATH"
+          export LDFLAGS="-undefined dynamic_lookup"
+          make package FINALPACKAGE=1
+      
+      - name: Extract Original
+        run: |
+          mkdir -p original_extracted
+          dpkg-deb -x original.deb original_extracted
+      
+      - name: Replace Plist
+        run: |
+          # 用原版的 plist 替换我们的 plist
+          cp original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist \
+             .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist
+          
+          echo "=== Original plist size ==="
+          ls -l original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist
+          echo "=== Our plist (after replace) ==="
+          ls -l .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist
+      
+      - name: Add RPath
+        run: |
+          export OUR_DYLIB=.theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          # 添加 rpath
+          install_name_tool -add_rpath /var/jb/Library/Frameworks $OUR_DYLIB
+          install_name_tool -add_rpath /var/jb/usr/lib $OUR_DYLIB
+          
+          # 重新签名
+          ldid -S $OUR_DYLIB
+      
+      - name: Package
+        run: |
+          cd .theos/_
+          dpkg-deb -b . ../../packages/musicfg_test_plist.deb
+          cd ../..
+          ls -lh packages/
+      
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-plist
+          path: packages/musicfg_test_plist.deb
