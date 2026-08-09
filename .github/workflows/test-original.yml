@@ -1,4 +1,4 @@
-name: Test Original Repack
+name: Test Signing
 
 on:
   workflow_dispatch:
@@ -15,31 +15,36 @@ jobs:
         run: |
           brew install dpkg ldid
       
-      - name: Extract Original DEB
+      - name: Extract Original
         run: |
           mkdir -p original_extracted
           dpkg-deb -x original.deb original_extracted
           dpkg-deb -e original.deb original_extracted/DEBIAN
           
-          echo "=== Original Dylib Info ==="
+          echo "=== Original dylib ==="
           file original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
-          
-          echo "=== Original Entitlements ==="
-          ldid -e original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib || echo "No entitlements or ldid failed"
-          
-          echo "=== Original Plist Info ==="
-          file original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist
-          
-          ls -lh original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/
+          echo "=== Original codesign ==="
+          codesign -dvvv original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib 2>&1 || echo "codesign failed"
       
-      - name: Repack Without Changes
+      - name: Re-sign Original
+        run: |
+          export DYLIB=original_extracted/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          # 用 ldid 重新签名
+          echo "=== Re-signing with ldid -S ==="
+          ldid -S $DYLIB
+          
+          echo "=== After re-sign ==="
+          file $DYLIB
+      
+      - name: Repack
         run: |
           mkdir -p packages
-          dpkg-deb -b original_extracted packages/musicfg_original_repacked.deb
+          dpkg-deb -b original_extracted packages/musicfg_resigned.deb
           ls -lh packages/
       
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: original-repacked
-          path: packages/*.deb
+          name: resigned-test
+          path: packages/musicfg_resigned.deb
