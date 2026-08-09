@@ -35,13 +35,37 @@ jobs:
           export PATH="$THEOS/bin:$PATH"
           make package FINALPACKAGE=1
           
-          # 调试：查看 dylib 架构
-          echo "=== Dylib Architecture ==="
-          file .theos/obj/iphone_arm64e/musicfg.dylib
+          # 创建 entitlements 文件（半越狱需要的权限）
+          cat > /tmp/ent.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>get-task-allow</key>
+              <true/>
+              <key>platform-application</key>
+              <true/>
+              <key>com.apple.private.security.no-container</key>
+              <true/>
+              <key>com.apple.private.security.no-sandbox</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
           
-          # 把 filter plist 转成二进制格式（和原版一样）
+          # 手动重新签名 dylib
+          echo "=== Re-signing dylib ==="
+          ldid -S/tmp/ent.xml .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.dylib
+          
+          # 把 filter plist 转成二进制格式
           echo "=== Converting plist to binary ==="
           plutil -convert binary1 .theos/_/var/jb/Library/MobileSubstrate/DynamicLibraries/musicfg.plist
+          
+          # 重新打包
+          echo "=== Repackaging ==="
+          cd .theos/_
+          dpkg-deb -b ../../packages/com.liuf.musicfg_2.0.0_iphoneos-arm64.deb .
+          cd ../..
           
           ls -lh packages/
       
